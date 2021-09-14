@@ -1,6 +1,4 @@
-import './style.scss';
-import ElmEnv from './Main.elm';
+import './scss/style.scss';
+import ElmRT from './Example/Main.elm';
 
-ElmEnv.Elm.Main.init({
-  flags: 0
-});
+ElmRT.Elm.Example.Main.init({flags: 0});
