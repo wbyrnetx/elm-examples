@@ -14,5 +14,5 @@ npm install
 ## Running
 To run, start the Webpack server:
 ```
-npm run 
+npm run start
 ```
