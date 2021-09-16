@@ -1,89 +1,60 @@
-module Razoyo.Debounce exposing (..)
+module Razoyo.Debounce exposing (PushMsg, State, debounce, init, push)
 
 import Process
-import Task
+import Task exposing (Task)
 
 
-
---
--- Search
---
-
-
-type alias Search =
-    { current : String
-    , previous : String
+type alias State =
+    { num : Int
+    , last : String
     }
 
 
-initSearch : Search
-initSearch =
-    { current = ""
-    , previous = ""
-    }
+init : State
+init =
+    State 0 ""
 
 
-setCurrentSearch : String -> Search -> Search
-setCurrentSearch pushed search =
-    { search | current = pushed }
-
-
-setPreviousSearch : Search -> Search
-setPreviousSearch search =
-    { search | previous = search.current }
-
-
-
--- Used if page loads on tab where search value already exists
-
-
-setAllSearch : String -> Search -> Search
-setAllSearch pushed search =
-    { search
-        | current = pushed
-        , previous = pushed
-    }
-
-
-
---
--- Debounce
---
-
-
-type alias Debounce =
-    { allowBlank : Bool
-    , current : String
-    , previous : String
-    , pushed : String
-    }
-
-
+defaultWait : Float
 defaultWait =
-    500
+    2000
 
 
-push : (String -> msg) -> String -> Cmd msg
-push toMsg value =
-    Process.sleep defaultWait
-        |> Task.andThen (\_ -> Task.succeed value)
-        |> Task.perform toMsg
+type alias PushMsg =
+    Int
 
 
-isDebounced : Debounce -> Bool
-isDebounced params =
+push : State -> String -> ( State, Task x PushMsg )
+push { num, last } value =
     let
-        pushedEqualsCurrent =
-            params.pushed == params.current
+        newNum =
+            num + 1
 
-        currentNotEqualsPrevious =
-            params.current /= params.previous
+        pushTask =
+            \_ ->
+                Task.succeed newNum
 
-        currentNotEmpty =
-            params.current /= ""
+        sleepTask =
+            Process.sleep defaultWait
+                |> Task.andThen pushTask
     in
-    if params.allowBlank then
-        pushedEqualsCurrent && currentNotEqualsPrevious
+    ( State newNum last, sleepTask )
+
+
+debounce : PushMsg -> State -> String -> ( State, Bool )
+debounce pushMsg { num, last } value =
+    let
+        isLast =
+            pushMsg == num
+
+        isDifferent =
+            value /= last
+
+        hasLength =
+            String.length value > 3
+    in
+    if isLast && isDifferent && hasLength then
+        ( State num value, True )
 
     else
-        pushedEqualsCurrent && currentNotEqualsPrevious && currentNotEmpty
+        ( State num last, False )

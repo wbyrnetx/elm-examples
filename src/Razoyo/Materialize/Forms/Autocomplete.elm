@@ -47,14 +47,14 @@ update msg state =
     customUpdate Nothing (Just identity) msg state
 
 
-customUpdate : Maybe (String -> msg) -> Maybe (String -> msg) -> Msg -> State -> ( State, Maybe msg )
+customUpdate : Maybe msg -> Maybe (String -> msg) -> Msg -> State -> ( State, Maybe msg )
 customUpdate onInput onChose msg state =
     case msg of
         Close ->
             ( { state | isOpen = False }, Nothing )
 
         Input search ->
-            ( { state | search = search }, Maybe.map (\x -> x search) onInput )
+            ( { state | search = search }, onInput )
 
         Focus ->
             ( { state | isOpen = True }, Nothing )

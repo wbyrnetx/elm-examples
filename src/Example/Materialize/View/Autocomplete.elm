@@ -3,9 +3,11 @@ module Example.Materialize.View.Autocomplete exposing (Model, Msg, init, update,
 import Html exposing (Html, div, h1, input, label, p, text)
 import Html.Attributes exposing (class, classList, id)
 import Html.Events exposing (onInput)
+import Razoyo.Debounce as Debounce
 import Razoyo.Materialize.Forms.Autocomplete as Autocomplete
 import Razoyo.RandomUser as RandomUser
 import Razoyo.Time exposing (zoneNames)
+import Task
 
 
 
@@ -21,6 +23,7 @@ type alias Model =
     , users : List RandomUser.User
     , userField : Autocomplete.State
     , selectedUser : Maybe RandomUser.User
+    , userDebounce : Debounce.State
     }
 
 
@@ -51,6 +54,7 @@ initialModel =
     , users = []
     , userField = Autocomplete.init
     , selectedUser = Nothing
+    , userDebounce = Debounce.init
     }
 
 
@@ -75,6 +79,7 @@ type Msg
     | TimezoneFieldMsg Autocomplete.Msg
     | DistributionFieldMsg Autocomplete.Msg
     | UserFieldMsg Autocomplete.Msg
+    | UserDebounced Debounce.PushMsg
 
 
 update : Msg -> Model -> ( Model, Cmd Msg )
@@ -95,10 +100,20 @@ update msg model =
             let
                 ( newState, maybeZone ) =
                     Autocomplete.update acMsg model.timezoneField
+
+                newModel =
+                    { model | timezoneField = newState }
             in
-            ( { model | selectedTimezone = maybeZone, timezoneField = newState }
-            , Cmd.none
-            )
+            case maybeZone of
+                -- The user selected a record
+                Just zone ->
+                    ( { newModel | selectedTimezone = maybeZone }
+                    , Cmd.none
+                    )
+
+                -- The user did something I don't care about
+                Nothing ->
+                    ( newModel, Cmd.none )
 
         {-
            I'm using a custom data type and need to find it from a list of options on my Model
@@ -112,14 +127,18 @@ update msg model =
                     { model | distributionField = newState }
             in
             case maybeId of
+                -- The user selected a record
                 Just id ->
                     case List.head (List.filter ((==) id << .name) model.distributions) of
+                        -- The ID of the reocrd the user selected exists, I have it
                         Just distribution ->
                             ( { newModel | selectedDistribution = Just distribution }, Cmd.none )
 
+                        -- The ID of the reocrd the user selected does NOT exist
                         Nothing ->
                             ( newModel, Cmd.none )
 
+                -- The user did something I don't care about
                 Nothing ->
                     ( newModel, Cmd.none )
 
@@ -139,9 +158,17 @@ update msg model =
                     { model | userField = newState }
             in
             case maybeOp of
-                Just (UserFieldInput input) ->
-                    ( newModel, Cmd.none )
+                -- The user did something I DO care about, they added input
+                Just UserFieldInput ->
+                    let
+                        ( newDebounce, debounceTask ) =
+                            Debounce.push newModel.userDebounce newState.search
+                    in
+                    ( { newModel | userDebounce = newDebounce }
+                    , Task.perform UserDebounced debounceTask
+                    )
 
+                -- The user did something I DO care about, they selected a record
                 Just (UserFieldChose id) ->
                     case List.head (List.filter ((==) id << .email) model.users) of
                         Just user ->
@@ -150,12 +177,27 @@ update msg model =
                         Nothing ->
                             ( newModel, Cmd.none )
 
+                -- The user did something I don't care about
                 Nothing ->
                     ( newModel, Cmd.none )
 
+        UserDebounced pushMsg ->
+            let
+                ( newState, isReady ) =
+                    Debounce.debounce pushMsg model.userDebounce model.userField.search
+
+                newModel =
+                    { model | userDebounce = newState }
+            in
+            if isReady then
+                ( newModel, RandomUser.request LoadedUsers )
+
+            else
+                ( newModel, Cmd.none )
+
 
 type UserFieldOp
-    = UserFieldInput String
+    = UserFieldInput
     | UserFieldChose String
 
 
