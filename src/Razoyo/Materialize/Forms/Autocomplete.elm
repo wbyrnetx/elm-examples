@@ -19,20 +19,20 @@ type alias Settings msg =
     }
 
 
-type alias Autocomplete =
+type alias State =
     { isOpen : Bool
     , search : Debounce.Search
     }
 
 
-init : Autocomplete
+init : State
 init =
     { isOpen = False
     , search = Debounce.initSearch
     }
 
 
-initWith : String -> Autocomplete
+initWith : String -> State
 initWith search =
     let
         newSearch =
@@ -54,12 +54,12 @@ type Msg
 
 
 type Action
-    = Internal Autocomplete
-    | Searched Autocomplete
-    | Selected Autocomplete
+    = Internal State
+    | Searched State
+    | Selected State
 
 
-update : Msg -> Autocomplete -> Action
+update : Msg -> State -> Action
 update msg autocomplete =
     case msg of
         Close ->
@@ -82,17 +82,17 @@ update msg autocomplete =
             Internal { autocomplete | isOpen = not autocomplete.isOpen }
 
 
-setSearchCurrent : String -> Autocomplete -> Autocomplete
+setSearchCurrent : String -> State -> State
 setSearchCurrent search ac =
     { ac | search = Debounce.setCurrentSearch search ac.search }
 
 
-setSearchPrevious : Autocomplete -> Autocomplete
+setSearchPrevious : State -> State
 setSearchPrevious ac =
     { ac | search = Debounce.setPreviousSearch ac.search }
 
 
-input : Settings msg -> Autocomplete -> List String -> Maybe String -> Html msg
+input : Settings msg -> State -> List String -> Maybe String -> Html msg
 input settings autocomplete options selectedOption =
     let
         search =
@@ -125,7 +125,7 @@ openAttributes isOpen =
     if isOpen then
         [ classList [ ( "active", True ) ]
         , style "display" "block"
-        , style "height" "50px"
+        , style "height" "200px"
         , style "left" "0px"
         , style "opacity" "1"
         , style "position" "absolute"

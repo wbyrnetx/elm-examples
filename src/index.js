@@ -1,4 +1,3 @@
-import './scss/style.scss';
-import ElmRT from './Example/Main.elm';
+import ElmRT from './Example/Index/Main.elm';
 
-ElmRT.Elm.Example.Main.init({flags: 0});
+ElmRT.Elm.Example.Index.Main.init({flags: 0});
