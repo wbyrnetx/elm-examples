@@ -1,48 +1,37 @@
-module Razoyo.Materialize.Forms.Autocomplete exposing (..)
+module Razoyo.Materialize.Forms.Autocomplete exposing (Msg, State, ViewConfig, customUpdate, init, initWith, input, update)
 
 import Html exposing (Attribute, Html, div, i, label, li, span, text, ul)
 import Html.Attributes exposing (class, classList, for, id, placeholder, selected, style, type_, value)
 import Html.Events exposing (onClick, onFocus, onInput)
 import Razoyo.Browser.Outside as Outside
-import Razoyo.Debounce as Debounce
 
 
-subscription : Settings msg -> Sub msg
-subscription settings =
-    Outside.subscription (settings.toMsg Close) settings.id
 
-
-type alias Settings msg =
-    { id : String
-    , label : String
-    , toMsg : Msg -> msg
-    }
+-- MODEL
 
 
 type alias State =
     { isOpen : Bool
-    , search : Debounce.Search
+    , search : String
     }
 
 
 init : State
 init =
     { isOpen = False
-    , search = Debounce.initSearch
+    , search = ""
     }
 
 
 initWith : String -> State
 initWith search =
-    let
-        newSearch =
-            Debounce.initSearch
-                |> Debounce.setCurrentSearch search
-                |> Debounce.setPreviousSearch
-    in
     { isOpen = False
-    , search = newSearch
+    , search = search
     }
+
+
+
+-- UPDATE
 
 
 type Msg
@@ -53,79 +42,125 @@ type Msg
     | Close
 
 
-type Action
-    = Internal State
-    | Searched State
-    | Selected State
+update : Msg -> State -> ( State, Maybe String )
+update msg state =
+    customUpdate Nothing (Just identity) msg state
 
 
-update : Msg -> State -> Action
-update msg autocomplete =
+customUpdate : Maybe (String -> msg) -> Maybe (String -> msg) -> Msg -> State -> ( State, Maybe msg )
+customUpdate onInput onChose msg state =
     case msg of
         Close ->
-            Internal { autocomplete | isOpen = False }
+            ( { state | isOpen = False }, Nothing )
 
-        Input search_ ->
-            Searched { autocomplete | search = Debounce.setCurrentSearch search_ autocomplete.search }
+        Input search ->
+            ( { state | search = search }, Maybe.map (\x -> x search) onInput )
 
         Focus ->
-            Internal { autocomplete | isOpen = True }
+            ( { state | isOpen = True }, Nothing )
 
-        Select selected ->
-            Selected
-                { autocomplete
-                    | isOpen = False
-                    , search = Debounce.setCurrentSearch selected autocomplete.search
-                }
+        Select id ->
+            ( { state | isOpen = False, search = id }, Maybe.map (\x -> x id) onChose )
 
         Toggle ->
-            Internal { autocomplete | isOpen = not autocomplete.isOpen }
+            ( { state | isOpen = not state.isOpen }, Nothing )
 
 
-setSearchCurrent : String -> State -> State
-setSearchCurrent search ac =
-    { ac | search = Debounce.setCurrentSearch search ac.search }
+
+-- VIEW
 
 
-setSearchPrevious : State -> State
-setSearchPrevious ac =
-    { ac | search = Debounce.setPreviousSearch ac.search }
+type alias ViewConfig a =
+    { id : String
+    , label : String
+    , placeholder : Maybe String
+    , toId : a -> String
+    }
 
 
-input : Settings msg -> State -> List String -> Maybe String -> Html msg
-input settings autocomplete options selectedOption =
-    let
-        search =
-            autocomplete.search.current
-
-        dropdown =
-            if List.isEmpty options then
-                []
-
-            else
-                [ ul
-                    (class "dropdown-content autocomplete-content"
-                        :: openAttributes autocomplete.isOpen
-                    )
-                    (List.map (option_ settings.toMsg selectedOption) options)
-                ]
-    in
+input : (Msg -> msg) -> ViewConfig a -> State -> List a -> Maybe a -> Html msg
+input toMsg config state options selected =
     div
-        [ id settings.id
+        [ id config.id
         , class "input-field select-wrapper"
         ]
         (smsIcon
-            :: mainInput settings.toMsg settings.id settings.label autocomplete.isOpen search
-            ++ dropdown
+            :: mainInput toMsg config state
+            ++ dropdown toMsg config state options selected
         )
 
 
-openAttributes : Bool -> List (Attribute msg)
-openAttributes isOpen =
+
+-- Input
+
+
+smsIcon : Html msg
+smsIcon =
+    i
+        [ class "material-icons prefix" ]
+        [ text "textsms" ]
+
+
+mainInput : (Msg -> msg) -> ViewConfig a -> State -> List (Html msg)
+mainInput toMsg config state =
+    [ Html.input
+        [ class "autocomplete validate"
+        , id config.id
+        , classList [ ( "active", state.isOpen ) ]
+        , type_ "text"
+        , value state.search
+        , onFocus (toMsg Focus)
+        , onInput (toMsg << Input)
+        , placeholder (Maybe.withDefault "" config.placeholder)
+        ]
+        []
+    , label
+        [ for config.id
+        , class "active"
+        ]
+        [ text config.label ]
+    ]
+
+
+
+-- Dropdown
+
+
+dropdown : (Msg -> msg) -> ViewConfig a -> State -> List a -> Maybe a -> List (Html msg)
+dropdown toMsg config state options selected =
+    if List.isEmpty options then
+        []
+
+    else
+        let
+            toOption =
+                option toMsg config selected
+
+            filteredOptions =
+                filterOptions config state.search options
+        in
+        [ ul
+            (class "dropdown-content autocomplete-content"
+                :: openAttributes state.isOpen (List.length filteredOptions)
+            )
+            (List.map toOption filteredOptions)
+        ]
+
+
+openAttributes : Bool -> Int -> List (Attribute msg)
+openAttributes isOpen optionCount =
+    let
+        heightPx =
+            if optionCount > 4 then
+                "200px"
+
+            else
+                String.fromInt (optionCount * 50) ++ "px"
+    in
     if isOpen then
         [ classList [ ( "active", True ) ]
         , style "display" "block"
-        , style "height" "200px"
+        , style "height" heightPx
         , style "left" "0px"
         , style "opacity" "1"
         , style "position" "absolute"
@@ -138,46 +173,23 @@ openAttributes isOpen =
         []
 
 
-option_ : (Msg -> msg) -> Maybe String -> String -> Html msg
-option_ toMsg selectedValue value_ =
+filterOptions : ViewConfig a -> String -> List a -> List a
+filterOptions config search allOptions =
     let
-        isSelected =
-            Maybe.map (\v -> v == value_) selectedValue
-                |> Maybe.withDefault False
+        matches =
+            \x ->
+                String.contains (String.toLower search) (String.toLower (config.toId x))
     in
+    List.filter matches allOptions
+
+
+option : (Msg -> msg) -> ViewConfig a -> Maybe a -> a -> Html msg
+option toMsg config selected option_ =
     li
-        [ classList [ ( "active", isSelected ) ]
-        , onClick (toMsg (Select value_))
+        [ classList [ ( "active", Just option_ == selected ) ]
+        , (onClick << toMsg << Select) (config.toId option_)
         ]
         [ span
             []
-            [ text value_ ]
+            [ text (config.toId option_) ]
         ]
-
-
-smsIcon : Html msg
-smsIcon =
-    i
-        [ class "material-icons prefix" ]
-        [ text "textsms" ]
-
-
-mainInput : (Msg -> msg) -> String -> String -> Bool -> String -> List (Html msg)
-mainInput toMsg id_ label_ isOpen value_ =
-    [ Html.input
-        [ class "autocomplete validate"
-        , id id_
-        , classList [ ( "active", isOpen ) ]
-        , type_ "text"
-        , value value_
-        , onFocus (toMsg Focus)
-        , onInput (toMsg << Input)
-        , placeholder <| "Select a " ++ label_
-        ]
-        []
-    , label
-        [ for id_
-        , class "active"
-        ]
-        [ text label_ ]
-    ]

@@ -28,8 +28,12 @@ type ViewType
 
 init : () -> ( Model, Cmd Msg )
 init _ =
-    ( Model (HelloWorld HelloWorld.init)
-    , Cmd.none
+    let
+        ( initialModel, initialCmd ) =
+            HelloWorld.init
+    in
+    ( Model (HelloWorld initialModel)
+    , Cmd.map HelloWorldUpdate initialCmd
     )
 
 
@@ -57,7 +61,11 @@ update : Msg -> Model -> ( Model, Cmd Msg )
 update msg model =
     case ( msg, model.view ) of
         ( ChangeView viewType, _ ) ->
-            ( { model | view = changeView viewType }, Cmd.none )
+            let
+                ( newView, initCmd ) =
+                    changeView viewType
+            in
+            ( { model | view = newView }, initCmd )
 
         ( HelloWorldUpdate viewMsg, HelloWorld data ) ->
             let
@@ -81,14 +89,26 @@ update msg model =
             ( model, Cmd.none )
 
 
-changeView : ViewType -> View
+changeView : ViewType -> ( View, Cmd Msg )
 changeView viewType =
     case viewType of
         HelloWorldType ->
-            HelloWorld HelloWorld.init
+            let
+                ( initialModel, initialCmd ) =
+                    HelloWorld.init
+            in
+            ( HelloWorld initialModel
+            , Cmd.map HelloWorldUpdate initialCmd
+            )
 
         AutocompleteType ->
-            Autocomplete Autocomplete.init
+            let
+                ( initialModel, initialCmd ) =
+                    Autocomplete.init
+            in
+            ( Autocomplete initialModel
+            , Cmd.map AutocompleteUpdate initialCmd
+            )
 
 
 

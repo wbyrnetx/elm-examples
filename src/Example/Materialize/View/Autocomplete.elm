@@ -4,38 +4,163 @@ import Html exposing (Html, div, h1, input, label, p, text)
 import Html.Attributes exposing (class, classList, id)
 import Html.Events exposing (onInput)
 import Razoyo.Materialize.Forms.Autocomplete as Autocomplete
+import Razoyo.RandomUser as RandomUser
+import Razoyo.Time exposing (zoneNames)
+
+
+
+-- MODEL
 
 
 type alias Model =
-    { autocomplete : Autocomplete.State
-    , selected : Maybe String
+    { distributions : List Distribution
+    , distributionField : Autocomplete.State
+    , selectedDistribution : Maybe Distribution
+    , timezoneField : Autocomplete.State
+    , selectedTimezone : Maybe String
+    , users : List RandomUser.User
+    , userField : Autocomplete.State
+    , selectedUser : Maybe RandomUser.User
     }
+
+
+type alias Distribution =
+    { name : String
+    , family : Family
+    }
+
+
+type Family
+    = Redhat
+    | Debian
+    | Other
+
+
+init : ( Model, Cmd Msg )
+init =
+    ( initialModel, RandomUser.request LoadedUsers )
+
+
+initialModel : Model
+initialModel =
+    { distributions = allDistributions
+    , distributionField = Autocomplete.init
+    , selectedDistribution = Nothing
+    , timezoneField = Autocomplete.init
+    , selectedTimezone = Nothing
+    , users = []
+    , userField = Autocomplete.init
+    , selectedUser = Nothing
+    }
+
+
+allDistributions : List Distribution
+allDistributions =
+    [ Distribution "Fedora" Redhat
+    , Distribution "Ubuntu" Debian
+    , Distribution "CentOS" Redhat
+    , Distribution "Debian" Debian
+    , Distribution "Arch" Other
+    , Distribution "Mint" Other
+    , Distribution "Kali" Debian
+    ]
+
+
+
+-- UPDATE
 
 
 type Msg
-    = FieldMsg Autocomplete.Msg
-
-
-init : Model
-init =
-    { autocomplete = Autocomplete.init
-    , selected = Nothing
-    }
+    = LoadedUsers RandomUser.RequestResult
+    | TimezoneFieldMsg Autocomplete.Msg
+    | DistributionFieldMsg Autocomplete.Msg
+    | UserFieldMsg Autocomplete.Msg
 
 
 update : Msg -> Model -> ( Model, Cmd Msg )
 update msg model =
     case msg of
-        FieldMsg acMsg ->
-            case Autocomplete.update acMsg model.autocomplete of
-                Autocomplete.Internal state ->
-                    ( { model | autocomplete = state }, Cmd.none )
+        LoadedUsers result ->
+            case result of
+                Ok users ->
+                    ( { model | users = users }, Cmd.none )
 
-                Autocomplete.Searched state ->
-                    ( { model | autocomplete = state }, Cmd.none )
+                Err _ ->
+                    ( model, Cmd.none )
 
-                Autocomplete.Selected state ->
-                    ( { model | autocomplete = state }, Cmd.none )
+        {-
+           I just need to update a string value from a static list of options
+        -}
+        TimezoneFieldMsg acMsg ->
+            let
+                ( newState, maybeZone ) =
+                    Autocomplete.update acMsg model.timezoneField
+            in
+            ( { model | selectedTimezone = maybeZone, timezoneField = newState }
+            , Cmd.none
+            )
+
+        {-
+           I'm using a custom data type and need to find it from a list of options on my Model
+        -}
+        DistributionFieldMsg acMsg ->
+            let
+                ( newState, maybeId ) =
+                    Autocomplete.update acMsg model.distributionField
+
+                newModel =
+                    { model | distributionField = newState }
+            in
+            case maybeId of
+                Just id ->
+                    case List.head (List.filter ((==) id << .name) model.distributions) of
+                        Just distribution ->
+                            ( { newModel | selectedDistribution = Just distribution }, Cmd.none )
+
+                        Nothing ->
+                            ( newModel, Cmd.none )
+
+                Nothing ->
+                    ( newModel, Cmd.none )
+
+        {-
+           I'm using a custom data type and need to find it from a list of options on my Model
+        -}
+        UserFieldMsg acMsg ->
+            let
+                ( newState, maybeOp ) =
+                    Autocomplete.customUpdate
+                        (Just UserFieldInput)
+                        (Just UserFieldChose)
+                        acMsg
+                        model.userField
+
+                newModel =
+                    { model | userField = newState }
+            in
+            case maybeOp of
+                Just (UserFieldInput input) ->
+                    ( newModel, Cmd.none )
+
+                Just (UserFieldChose id) ->
+                    case List.head (List.filter ((==) id << .email) model.users) of
+                        Just user ->
+                            ( { newModel | selectedUser = Just user }, Cmd.none )
+
+                        Nothing ->
+                            ( newModel, Cmd.none )
+
+                Nothing ->
+                    ( newModel, Cmd.none )
+
+
+type UserFieldOp
+    = UserFieldInput String
+    | UserFieldChose String
+
+
+
+-- VIEjW
 
 
 view : Model -> Html Msg
@@ -47,41 +172,144 @@ view model =
             [ h1
                 []
                 [ text "Autocomplete" ]
-            , field model
+            , div
+                [ class "row" ]
+                [ timezoneField model ]
+            , div
+                [ class "row" ]
+                [ distributionField model ]
+            , div
+                [ class "row" ]
+                [ userField model ]
             ]
         ]
 
 
-field : Model -> Html Msg
-field model =
+
+-- Timezone
+
+
+timezoneField : Model -> Html Msg
+timezoneField model =
+    let
+        info =
+            model.selectedTimezone
+                |> Maybe.map (\x -> "You selected " ++ x)
+                |> Maybe.withDefault ""
+    in
     div
         [ class "field" ]
         [ div
             [ class "control" ]
             [ Autocomplete.input
-                fieldSettings
-                model.autocomplete
-                fieldOptions
-                model.selected
+                TimezoneFieldMsg
+                timezoneFieldConfig
+                model.timezoneField
+                zoneNames
+                model.selectedTimezone
+            ]
+        , p
+            []
+            [ text info ]
+        ]
+
+
+timezoneFieldConfig : Autocomplete.ViewConfig String
+timezoneFieldConfig =
+    { id = "timezone-ac"
+    , label = "What is your timezone?"
+    , placeholder = Just "UTC"
+    , toId = identity
+    }
+
+
+
+-- Linux Distribution autocomplete
+
+
+distributionField : Model -> Html Msg
+distributionField model =
+    div
+        [ class "field" ]
+        [ div
+            [ class "control" ]
+            [ Autocomplete.input
+                DistributionFieldMsg
+                distributionFieldConfig
+                model.distributionField
+                model.distributions
+                model.selectedDistribution
+            , p
+                []
+                [ text (familyMessage model.selectedDistribution) ]
             ]
         ]
 
 
-fieldSettings : Autocomplete.Settings Msg
-fieldSettings =
-    { id = "ac-field"
+distributionFieldConfig : Autocomplete.ViewConfig Distribution
+distributionFieldConfig =
+    { id = "distribution-ac"
     , label = "Favorite Linux Distribution"
-    , toMsg = FieldMsg
+    , placeholder = Nothing
+    , toId = .name
     }
 
 
-fieldOptions : List String
-fieldOptions =
-    [ "Fedora"
-    , "Ubuntu"
-    , "CentOS"
-    , "Debian"
-    , "Arch"
-    , "Mint"
-    , "Kali"
-    ]
+familyMessage : Maybe Distribution -> String
+familyMessage maybeDistribution =
+    case maybeDistribution of
+        Just distribution ->
+            case distribution.family of
+                Redhat ->
+                    "Oh, you like Redhat?"
+
+                Debian ->
+                    "So basic."
+
+                Other ->
+                    "You are so indie."
+
+        Nothing ->
+            ""
+
+
+
+-- User autocomplete
+
+
+userField : Model -> Html Msg
+userField model =
+    div
+        [ class "field" ]
+        [ div
+            [ class "control" ]
+            [ Autocomplete.input
+                UserFieldMsg
+                userFieldConfig
+                model.userField
+                model.users
+                model.selectedUser
+            , p
+                []
+                [ text (userGreeting model.selectedUser) ]
+            ]
+        ]
+
+
+userFieldConfig : Autocomplete.ViewConfig RandomUser.User
+userFieldConfig =
+    { id = "user-ac"
+    , label = "User"
+    , placeholder = Nothing
+    , toId = .email
+    }
+
+
+userGreeting : Maybe RandomUser.User -> String
+userGreeting maybeUser =
+    case maybeUser of
+        Just user ->
+            "Hello, " ++ user.firstName ++ " " ++ user.lastName
+
+        Nothing ->
+            ""

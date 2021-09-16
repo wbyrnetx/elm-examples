@@ -13,9 +13,9 @@ type Msg
     = Input String
 
 
-init : Model
+init : ( Model, Cmd Msg )
 init =
-    { input = "" }
+    ( { input = "" }, Cmd.none )
 
 
 update : Msg -> Model -> ( Model, Cmd Msg )
