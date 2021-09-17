@@ -1,7 +1,17 @@
-module Razoyo.Debounce exposing (PushMsg, State, debounce, init, push)
+module Razoyo.Debounce exposing (PushMsg, State, debounce, debounceWith, init, push, pushWith)
 
 import Process
 import Task exposing (Task)
+
+
+defaultWaitTime : Float
+defaultWaitTime =
+    1000
+
+
+defaultMinLength : Int
+defaultMinLength =
+    2
 
 
 type alias State =
@@ -15,17 +25,17 @@ init =
     State 0 ""
 
 
-defaultWait : Float
-defaultWait =
-    2000
-
-
 type alias PushMsg =
     Int
 
 
 push : State -> String -> ( State, Task x PushMsg )
-push { num, last } value =
+push state value =
+    pushWith defaultWaitTime state value
+
+
+pushWith : Float -> State -> String -> ( State, Task x PushMsg )
+pushWith waitTime { num, last } value =
     let
         newNum =
             num + 1
@@ -35,14 +45,19 @@ push { num, last } value =
                 Task.succeed newNum
 
         sleepTask =
-            Process.sleep defaultWait
+            Process.sleep waitTime
                 |> Task.andThen pushTask
     in
     ( State newNum last, sleepTask )
 
 
 debounce : PushMsg -> State -> String -> ( State, Bool )
-debounce pushMsg { num, last } value =
+debounce pushMsg state value =
+    debounceWith defaultMinLength pushMsg state value
+
+
+debounceWith : Int -> PushMsg -> State -> String -> ( State, Bool )
+debounceWith minLength pushMsg { num, last } value =
     let
         isLast =
             pushMsg == num
@@ -51,7 +66,7 @@ debounce pushMsg { num, last } value =
             value /= last
 
         hasLength =
-            String.length value > 3
+            String.length value > minLength
     in
     if isLast && isDifferent && hasLength then
         ( State num value, True )
