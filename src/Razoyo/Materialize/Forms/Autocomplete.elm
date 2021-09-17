@@ -1,8 +1,10 @@
-module Razoyo.Materialize.Forms.Autocomplete exposing (Msg, State, ViewConfig, customUpdate, init, initWith, input, update)
+module Razoyo.Materialize.Forms.Autocomplete exposing (Msg, State, ViewConfig, customUpdate, init, initWith, input, subscription, update)
 
+import Browser.Events
 import Html exposing (Attribute, Html, div, i, label, li, span, text, ul)
 import Html.Attributes exposing (class, classList, for, id, placeholder, selected, style, type_, value)
 import Html.Events exposing (onClick, onFocus, onInput)
+import Json.Decode as D
 import Razoyo.Browser.Outside as Outside
 
 
@@ -31,15 +33,37 @@ initWith search =
 
 
 
+-- SUBSCRIPTIONS
+
+
+subscription : (Msg -> msg) -> String -> Sub msg
+subscription toMsg acId =
+    Browser.Events.onClick <|
+        D.map (toMsg << OutsideClick) (outsideClickDecoder acId)
+
+
+outsideClickDecoder : String -> D.Decoder Bool
+outsideClickDecoder acId =
+    let
+        itemDecoder =
+            D.oneOf [ D.field "id" D.string, D.succeed "" ]
+
+        listDecoder =
+            D.field "path" (D.list itemDecoder)
+    in
+    listDecoder
+        |> D.andThen (D.succeed << List.member acId)
+
+
+
 -- UPDATE
 
 
 type Msg
-    = Focus
-    | Input String
+    = Input String
     | Select String
-    | Toggle
-    | Close
+    | Focus
+    | OutsideClick Bool
 
 
 update : Msg -> State -> ( State, Maybe String )
@@ -50,20 +74,25 @@ update msg state =
 customUpdate : Maybe msg -> Maybe (String -> msg) -> Msg -> State -> ( State, Maybe msg )
 customUpdate onInput onChose msg state =
     case msg of
-        Close ->
-            ( { state | isOpen = False }, Nothing )
-
         Input search ->
             ( { state | search = search }, onInput )
-
-        Focus ->
-            ( { state | isOpen = True }, Nothing )
 
         Select id ->
             ( { state | isOpen = False, search = id }, Maybe.map (\x -> x id) onChose )
 
-        Toggle ->
-            ( { state | isOpen = not state.isOpen }, Nothing )
+        Focus ->
+            ( { state | isOpen = True }, Nothing )
+
+        OutsideClick inElem ->
+            let
+                _ =
+                    Debug.log "OutsideClick" inElem
+            in
+            if not inElem then
+                ( { state | isOpen = False }, Nothing )
+
+            else
+                ( state, Nothing )
 
 
 

@@ -1,4 +1,4 @@
-module Example.Materialize.View.Autocomplete exposing (Model, Msg, init, update, view)
+module Example.Materialize.View.Autocomplete exposing (Model, Msg, init, subscriptions, update, view)
 
 import Html exposing (Html, div, h1, input, label, p, text)
 import Html.Attributes exposing (class, classList, id)
@@ -80,6 +80,7 @@ type Msg
     | DistributionFieldMsg Autocomplete.Msg
     | UserFieldMsg Autocomplete.Msg
     | UserDebounced Debounce.PushMsg
+    | ScreenClick (List String)
 
 
 update : Msg -> Model -> ( Model, Cmd Msg )
@@ -195,6 +196,13 @@ update msg model =
             else
                 ( newModel, Cmd.none )
 
+        ScreenClick pathIds ->
+            let
+                _ =
+                    Debug.log "ScreenClick" pathIds
+            in
+            ( model, Cmd.none )
+
 
 type UserFieldOp
     = UserFieldInput
@@ -202,7 +210,20 @@ type UserFieldOp
 
 
 
--- VIEjW
+-- SUBSCRIPTIONS
+
+
+subscriptions : Model -> Sub Msg
+subscriptions model =
+    Sub.batch
+        [ Autocomplete.subscription TimezoneFieldMsg timezoneFieldConfig.id
+        , Autocomplete.subscription DistributionFieldMsg distributionFieldConfig.id
+        , Autocomplete.subscription UserFieldMsg userFieldConfig.id
+        ]
+
+
+
+-- VIEW
 
 
 view : Model -> Html Msg

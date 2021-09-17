@@ -195,10 +195,20 @@ footer =
 -- MAIN
 
 
+subscriptions : Model -> Sub Msg
+subscriptions model =
+    case model.view of
+        HelloWorld viewModel ->
+            Sub.map HelloWorldUpdate (HelloWorld.subscriptions viewModel)
+
+        Autocomplete viewModel ->
+            Sub.map AutocompleteUpdate (Autocomplete.subscriptions viewModel)
+
+
 main =
     Browser.document
         { init = init
         , view = view
         , update = update
-        , subscriptions = \_ -> Sub.none
+        , subscriptions = subscriptions
         }

@@ -1,8 +1,21 @@
-module Example.Materialize.View.HelloWorld exposing (Model, Msg, init, update, view)
+module Example.Materialize.View.HelloWorld exposing (Model, Msg, init, subscriptions, update, view)
 
 import Html exposing (Html, div, h1, input, label, p, text)
 import Html.Attributes exposing (class, id, value)
 import Html.Events exposing (onInput)
+
+
+
+-- MAIN
+
+
+subscriptions : Model -> Sub Msg
+subscriptions model =
+    Sub.none
+
+
+
+-- MODEL
 
 
 type alias Model =
@@ -18,11 +31,19 @@ init =
     ( { input = "" }, Cmd.none )
 
 
+
+-- UPDATE
+
+
 update : Msg -> Model -> ( Model, Cmd Msg )
 update msg model =
     case msg of
         Input input ->
             ( { model | input = input }, Cmd.none )
+
+
+
+-- VIEW
 
 
 view : Model -> Html Msg
